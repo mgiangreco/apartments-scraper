@@ -15,7 +15,7 @@ try:
 except ImportError:
     import ConfigParser as configparser
 
-def create_csv(search_urls, map_info, fname, pscores):
+def create_csv(search_urls, fname):
     """Create a CSV file with information that can be imported into ideal-engine"""
 
     # avoid the issue on Windows where there's an extra space every other line
@@ -35,32 +35,26 @@ def create_csv(search_urls, map_info, fname, pscores):
         # write_parsed_to_csv)
         header = ['Option Name', 'Contact', 'Address', 'Size',
                   'Rent', 'Monthly Fees', 'One Time Fees',
-                  'Pet Policy', 'Distance', 'Duration',
+                  'Pet Policy', 
                   'Parking', 'Gym', 'Kitchen',
                   'Amenities', 'Features', 'Living Space',
                   'Lease Info', 'Services',
                   'Property Info', 'Indoor Info', 'Outdoor Info',
                   'Images', 'Description']
-        # add the score fields if necessary
-        if pscores:
-            for i in xrange(len(header), 0, -1):
-                header.insert(i, 5)
-            # flag that we're importing with scores
-            header[1] = 'score'
-            header.append('modifier')
+
         # write the header
         writer.writerow(header)
 
         # parse current entire apartment list including pagination for all search urls
         for url in search_urls:
             print ("Now getting apartments from: %s" % url)
-            write_parsed_to_csv(url, map_info, writer, pscores)
+            write_parsed_to_csv(url, writer)
 
     finally:
         csv_file.close()
 
 
-def write_parsed_to_csv(page_url, map_info, writer, pscores):
+def write_parsed_to_csv(page_url, writer):
     """Given the current page URL, extract the information from each apartment in the list"""
 
     # read the current page
@@ -93,27 +87,22 @@ def write_parsed_to_csv(page_url, map_info, writer, pscores):
             contact = obj.getText().strip()
 
         # get the other fields to write to the CSV
-        fields = parse_apartment_information(url, map_info)
+        fields = parse_apartment_information(url)
 
         # make this wiki markup
         fields['name'] = '[' + str(fields['name']) + '](' + url + ')'
-        fields['address'] = '[' + fields['address'] + '](' + fields['map'] + ')'
+        fields['address'] = '[' + fields['address'] + '](' + ')'
 
         # fill out the CSV file
         row = [fields['name'], contact,
                fields['address'], fields['size'],
                rent, fields['monthFees'], fields['onceFees'],
-               fields['petPolicy'], fields['distance'], fields['duration'],
+               fields['petPolicy'], 
                fields['parking'], fields['gym'], fields['kitchen'],
                fields['amenities'], fields['features'], fields['space'],
                fields['lease'], fields['services'],
                fields['info'], fields['indoor'], fields['outdoor'],
                fields['img'], fields['description']]
-        # add the score fields if necessary
-        if pscores:
-            for i in xrange(len(row), 0, -1):
-                row.insert(i, '5')
-            row.append('0')
         # write the row
         writer.writerow(row)
 
@@ -131,10 +120,10 @@ def write_parsed_to_csv(page_url, map_info, writer, pscores):
         return
 
     # recurse until the last page
-    write_parsed_to_csv(next_url, map_info, writer, pscores)
+    write_parsed_to_csv(next_url, writer)
 
 
-def parse_apartment_information(url, map_info):
+def parse_apartment_information(url):
     """For every apartment page, populate the required fields to be written to CSV"""
 
     # read the current page
@@ -201,17 +190,6 @@ def parse_apartment_information(url, map_info):
 
     # get the 'property information'
     get_features_and_info(soup, fields)
-
-    # get the link to open in maps
-    fields['map'] = 'https://www.google.com/maps/dir/' \
-                    + map_info['target_address'].replace(' ', '+') + '/' \
-                    + fields['address'].replace(' ', '+') + '/data=!4m2!4m1!3e2'
-
-    fields['distance'] = ''
-    fields['duration'] = ''
-    if map_info['use_google_maps']:
-        # get the distance and duration to the target address using the Google API
-        get_distance_duration(map_info, fields)
 
     return fields
 
@@ -384,36 +362,6 @@ def get_fees(soup, fields):
     fields['monthFees'] = fields['monthFees'].strip()
     fields['onceFees'] = fields['onceFees'].strip()
 
-
-def get_distance_duration(map_info, fields):
-    """Use google API to return the distance and time to the target address"""
-
-    fields['distance'] = ''
-    fields['duration'] = ''
-
-    # get the distance and the time from google
-    # getting to work in the morning
-    origin = map_info['target_address'].replace(' ', '+')
-    destination = fields['address'].replace(' ', '+')
-    map_url = map_info['maps_url'] + '&origins=' + origin + '&destinations=' + \
-        destination + '&arrival_time=' + map_info['morning']
-
-    # populate the distance / duration fields for morning
-    travel_morning = get_travel_time(map_url)
-    
-    # coming back from work in the evening
-    origin = fields['address'].replace(' ', '+')
-    destination = map_info['target_address'].replace(' ', '+')
-    map_url = map_info['maps_url'] + '&origins=' + origin + '&destinations=' + \
-        destination + '&departure_time=' + map_info['evening']
-
-    # populate the distance / duration fields for evening
-    travel_evening = get_travel_time(map_url)
-
-    # take the average
-    fields['distance'] = average_field(travel_morning, travel_evening, 'distance')
-    fields['duration'] = average_field(travel_morning, travel_evening, 'duration')
-
 def average_field(obj1, obj2, field):
     """Take the average given two objects that have field values followed by (same) unit"""
     val1 = float(prettify_text(obj1[field]).split()[0])
@@ -425,28 +373,6 @@ def average_field(obj1, obj2, field):
         avg = int(avg)
 
     return str(avg) + unit
-
-def get_travel_time(map_url):
-    """Get the travel distance & time from Google Maps distance matrix app given a URL"""
-
-    # the travel info dict
-    travel = {}
-
-    # read and parse the google maps distance / duration from the api
-    response = requests.get(map_url).json()
-    
-    # the status might not be OK, ignore this in that case
-    if response['status'] == 'OK':
-        response = response['rows'][0]['elements'][0]
-        # extract the distance and duration
-        if response['status'] == 'OK':
-            # get the info
-            travel['distance'] = response['distance']['text']
-            travel['duration'] = response['duration']['text']
-
-    # return the travel info
-    return travel
-
 
 def get_property_name(soup, fields):
     """Given a beautifulSoup parsed page, extract the name of the property"""
@@ -509,7 +435,7 @@ def parse_config_times(given_time):
     return str(int(time_since_epoch))
 
 def main():
-    """Read from the config file and get the Google maps info optionally"""
+    """Read from the config file"""
 
     conf = configparser.ConfigParser()
     config_file = os.path.join(os.path.dirname(__file__), "config.ini")
@@ -522,37 +448,7 @@ def main():
     # get the name of the output file
     fname = conf.get('all', 'fname') + '.csv'
 
-    # should this also print the scores
-    pscores = (conf.get('all', 'printScores') in ['T', 't', '1', 'True', 'true'])
-
-    # create a dict to pass in all of the Google Maps info to have fewer params
-    map_info = {}
-
-    # get the target address for Maps URL / calculations
-    map_info['target_address'] = conf.get('all', 'targetAddress')
-
-    # get the Google Maps information
-
-    # should use Google Maps? 
-    # maybe not since you have to provide credit card info, the URL will still work
-    map_info['use_google_maps'] = conf.get('all', 'useGoogleMaps') in ['T', 't', '1', 'True', 'true']
-
-    if map_info['use_google_maps']:
-        # get the URL to Google Maps
-        map_info['maps_url'] = conf.get('all', 'mapsURL')
-        # get the times for going to / coming back from work
-        # and convert these to seconds since epoch, EST tomorrow
-        map_info['morning'] = parse_config_times(conf.get('all', 'morning'))
-        map_info['evening'] = parse_config_times(conf.get('all', 'evening'))
-        # create the maps URL
-        units = conf.get('all', 'mapsUnits')
-        mode = conf.get('all', 'mapsMode')
-        routing = conf.get('all', 'mapsTransitRouting')
-        google_api_key = conf.get('all', 'mapsAPIKey')
-        map_info['maps_url'] += 'units=' + units + '&mode=' + mode + \
-            '&transit_routing_preference=' + routing + '&key=' + google_api_key
-
-    create_csv(urls, map_info, fname, pscores)
+    create_csv(urls, fname)
 
 
 if __name__ == '__main__':
