@@ -1,5 +1,6 @@
 import boto3
 import csv
+import datetime
 import json
 import re
 import sys
@@ -39,7 +40,7 @@ def create_csv(search_urls, fname):
                   'Amenities', 'Features', 'Living Space',
                   'Lease Info', 'Services',
                   'Property Info', 'Indoor Info', 'Outdoor Info',
-                  'Images', 'Description']
+                  'Images', 'Description', 'ds']
 
         # write the header
         writer.writerow(header)
@@ -92,6 +93,9 @@ def write_parsed_to_csv(page_url, writer):
         fields['name'] = '[' + str(fields['name']) + '](' + url + ')'
         fields['address'] = '[' + fields['address'] + '](' + ')'
 
+        # get the datetime
+        fields['ds'] = str(datetime.datetime.utcnow().date())
+
         # fill out the CSV file
         row = [fields['name'], contact,
                fields['address'], fields['size'],
@@ -101,7 +105,7 @@ def write_parsed_to_csv(page_url, writer):
                fields['amenities'], fields['features'], fields['space'],
                fields['lease'], fields['services'],
                fields['info'], fields['indoor'], fields['outdoor'],
-               fields['img'], fields['description']]
+               fields['img'], fields['description'], fields['ds']]
         # write the row
         writer.writerow(row)
 
