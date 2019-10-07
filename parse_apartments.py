@@ -1,5 +1,4 @@
-"""Parse an apartments.com search result page and export to CSV."""
-
+import boto3
 import csv
 import json
 import re
@@ -434,6 +433,11 @@ def parse_config_times(given_time):
     time_since_epoch = (date_time - epoch).total_seconds()
     return str(int(time_since_epoch))
 
+def save_file_to_s3(bucket, fname):
+    s3 = boto3.resource('s3')        
+    data = open(fname, 'rb')
+    s3.Bucket(bucket).put_object(Key=fname, Body=data)
+
 def main():
     """Read from the config file"""
 
@@ -449,6 +453,8 @@ def main():
     fname = conf.get('all', 'fname') + '.csv'
 
     create_csv(urls, fname)
+
+    save_file_to_s3('mg-apartments', fname)
 
 
 if __name__ == '__main__':
